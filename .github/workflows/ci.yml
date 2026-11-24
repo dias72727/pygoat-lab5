@@ -62,3 +62,32 @@ jobs:
       with:
         name: docker-scout-findings
         path: scout-report.sarif
+  dast_scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy PyGoat
+        run: |
+          docker pull pygoat/pygoat:latest
+          docker run --rm -d --name pygoat -p 8000:8000 pygoat/pygoat:latest
+
+      - name: Wait for PyGoat
+        run: |
+          timeout 120 bash -c '
+            until curl -fsS http://localhost:8000/ > /dev/null; do
+              echo "Waiting for PyGoat..."
+              sleep 5
+            done
+          '
+
+      - name: OWASP ZAP Scan
+        uses: zaproxy/action-full-scan@v0.12.0
+        with:
+          target: 'http://localhost:8000'
+          fail_action: false
+          allow_issue_writing: false
+          artifact_name: 'dast-report'
+
+      - name: Stop PyGoat
+        if: always()
+        run: docker stop pygoat
